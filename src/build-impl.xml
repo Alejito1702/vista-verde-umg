@@ -1,0 +1,168 @@
+package vistaverde.ui;
+
+import vistaverde.modelos.*;
+import javax.swing.*;
+import javax.swing.table.*;
+import java.awt.*;
+import java.util.ArrayList;
+
+/**
+ * Pantalla 6 — Estado de Cuenta por Casa.
+ * Muestra nombre del propietario, meses pagados, meses pendientes y total pagado.
+ */
+public class EstadoCuenta extends VistaBase {
+
+    private JComboBox<String>  cmbCasa;
+    private JTextArea          taResumen;
+    private DefaultTableModel  modeloPagados, modeloPendientes;
+
+    public EstadoCuenta(JFrame menuRef) {
+        super("Estado de Cuenta", menuRef);
+        setSize(600, 560);
+
+        JPanel fondo = crearPanelFondo();
+        fondo.setLayout(new BorderLayout(10, 10));
+
+        // ── Título ──
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        top.setOpaque(false);
+        top.setBorder(BorderFactory.createEmptyBorder(18, 0, 0, 0));
+        top.add(lblTitulo("📋  Estado de Cuenta"));
+        fondo.add(top, BorderLayout.NORTH);
+
+        // ── Selector ──
+        JPanel selPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+        selPanel.setOpaque(false);
+        selPanel.add(lblCampo("Casa N°:"));
+        String[] casas = new String[31];
+        casas[0] = "Seleccione";
+        for (int i = 1; i <= 30; i++) casas[i] = String.valueOf(i);
+        cmbCasa = styledCombo(casas);
+        cmbCasa.setPreferredSize(new Dimension(120, 28));
+        JButton btnConsultar = btnPrincipal("Consultar");
+        btnConsultar.setPreferredSize(new Dimension(110, 32));
+        btnConsultar.addActionListener(e -> consultar());
+        selPanel.add(cmbCasa);
+        selPanel.add(btnConsultar);
+
+        // ── Resumen ──
+        taResumen = new JTextArea(3, 40);
+        taResumen.setEditable(false);
+        taResumen.setBackground(new Color(20, 70, 35));
+        taResumen.setForeground(GREEN_LITE);
+        taResumen.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        taResumen.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
+        taResumen.setText("Seleccione una casa y presione Consultar.");
+
+        // ── Tablas ──
+        modeloPagados = new DefaultTableModel(
+            new String[]{"Mes Pagado", "Año", "Monto"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        modeloPendientes = new DefaultTableModel(
+            new String[]{"Mes Pendiente", "Año"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+
+        JTable tPagados    = makeTable(modeloPagados,   new Color(15,45,25),  GREEN_LITE);
+        JTable tPendientes = makeTable(modeloPendientes, new Color(60,15,15), new Color(255,160,160));
+
+        JPanel tablas = new JPanel(new GridLayout(1, 2, 12, 0));
+        tablas.setOpaque(false);
+        tablas.add(scrollTabla(tPagados,    "Meses Pagados",    GREEN_BORD));
+        tablas.add(scrollTabla(tPendientes, "Meses Pendientes", new Color(180,40,40)));
+
+        // ── Layout central ──
+        JPanel centro = new JPanel(new BorderLayout(0, 8));
+        centro.setOpaque(false);
+        centro.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 16));
+        centro.add(selPanel,  BorderLayout.NORTH);
+        centro.add(taResumen, BorderLayout.CENTER);
+        centro.add(tablas,    BorderLayout.SOUTH);
+        fondo.add(centro, BorderLayout.CENTER);
+
+        JPanel bot = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 8));
+        bot.setOpaque(false);
+        bot.add(btnRegresar());
+        fondo.add(bot, BorderLayout.SOUTH);
+
+        setContentPane(fondo);
+    }
+
+    /** Crea y estiliza una JTable */
+    private JTable makeTable(DefaultTableModel model, Color bg, Color fg) {
+        JTable t = new JTable(model);
+        t.setBackground(bg);
+        t.setForeground(fg);
+        t.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        t.setGridColor(bg.brighter());
+        t.setRowHeight(22);
+        t.getTableHeader().setBackground(bg.darker());
+        t.getTableHeader().setForeground(fg);
+        return t;
+    }
+
+    /** Envuelve una tabla en un JScrollPane con título */
+    private JPanel scrollTabla(JTable tabla, String titulo, Color borderColor) {
+        JLabel lbl = new JLabel(titulo);
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lbl.setForeground(GREEN_MED);
+        lbl.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
+
+        JScrollPane scroll = new JScrollPane(tabla);
+        scroll.getViewport().setBackground(tabla.getBackground());
+        scroll.setBorder(BorderFactory.createLineBorder(borderColor));
+        scroll.setPreferredSize(new Dimension(0, 180));
+
+        JPanel panel = new JPanel(new BorderLayout(0, 4));
+        panel.setOpaque(false);
+        panel.add(lbl,    BorderLayout.NORTH);
+        panel.add(scroll, BorderLayout.CENTER);
+        return panel;
+    }
+
+    /** Consulta y muestra el estado de cuenta de la casa seleccionada */
+    private void consultar() {
+        if (cmbCasa.getSelectedIndex() == 0) { mostrarError("Seleccione una casa."); return; }
+
+        int n = Integer.parseInt(cmbCasa.getSelectedItem().toString());
+        Condominio cond = Condominio.getInstance();
+        Casa casa = cond.buscarCasa(n);
+
+        modeloPagados.setRowCount(0);
+        modeloPendientes.setRowCount(0);
+
+        String anioActual = cond.getAnioActual();
+        ArrayList<Pago> pagos = casa.getPagos();
+        double total = 0;
+        int totalPagados = 0;
+
+        // Meses pagados
+        for (Pago p : pagos) {
+            modeloPagados.addRow(new Object[]{
+                p.getMes(), p.getAnio(), String.format("Q%.2f", p.getMonto())});
+            total += p.getMonto();
+            totalPagados++;
+        }
+
+        // Meses pendientes del año actual
+        int pendientes = 0;
+        for (String mes : Condominio.MESES) {
+            if (!casa.yaPago(mes, anioActual)) {
+                modeloPendientes.addRow(new Object[]{mes, anioActual});
+                pendientes++;
+            }
+        }
+
+        String propNombre = casa.tienePropietario()
+            ? casa.getPropietario().getNombreCompleto() : "(sin propietario)";
+        String estado = pendientes == 0 ? "✔ AL DÍA (" + anioActual + ")"
+            : "⚠ " + pendientes + " mes(es) pendiente(s) en " + anioActual;
+
+        taResumen.setText(
+            "Casa " + n + "   |   Propietario: " + propNombre + "\n"
+            + "Pagos registrados: " + totalPagados
+            + "   |   Total pagado: Q" + String.format("%.2f", total) + "\n"
+            + "Estado " + anioActual + ": " + estado);
+    }
+}
